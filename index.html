@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kodeka – AI Coding & Life Helper (Terminal + Web)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); color: #e0e0ff; font-family: 'Segoe UI', system-ui; }
+    .chat-bubble-user { background: #6366f1; align-self: flex-end; }
+    .chat-bubble-ai   { background: #4f46e5; align-self: flex-start; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <header class="p-6 text-center">
+    <h1 class="text-5xl font-bold mb-2">Kodeka</h1>
+    <p class="text-xl opacity-80">AI companion for coders — in terminal & browser</p>
+    <div class="mt-6 space-x-4">
+      <a href="#install" class="btn bg-indigo-600 hover:bg-indigo-500 px-6 py-3 rounded-lg font-semibold">Install CLI</a>
+      <button onclick="document.getElementById('auth').scrollIntoView()" class="btn bg-purple-600 hover:bg-purple-500 px-6 py-3 rounded-lg font-semibold">Sign In / Join</button>
+    </div>
+  </header>
+
+  <section id="install" class="max-w-4xl mx-auto p-8 bg-black/40 rounded-xl my-8 border border-indigo-500/30">
+    <h2 class="text-3xl mb-4">Terminal Power – One line install</h2>
+    <pre class="bg-gray-900 p-4 rounded overflow-x-auto"><code>curl -fsSL https://kodeka.ai/install | bash</code></pre>
+    <p class="mt-3 opacity-80">Works on macOS / Linux / WSL. Windows support coming soon.</p>
+  </section>
+
+  <section id="auth" class="max-w-md mx-auto p-8 bg-black/50 rounded-xl border border-purple-500/30 my-12">
+    <h2 class="text-3xl mb-6 text-center">Get Started</h2>
+    
+    <div id="login-form" class="space-y-4">
+      <input id="email"    type="email"    placeholder="Email"    class="w-full p-3 rounded bg-gray-800 border border-gray-600 focus:outline-none focus:border-indigo-500"/>
+      <input id="password" type="password" placeholder="Password" class="w-full p-3 rounded bg-gray-800 border border-gray-600 focus:outline-none focus:border-indigo-500"/>
+      <button onclick="signUp()" class="w-full bg-green-600 hover:bg-green-500 p-3 rounded font-bold">Sign Up</button>
+      <button onclick="signIn()" class="w-full bg-indigo-600 hover:bg-indigo-500 p-3 rounded font-bold">Sign In</button>
+    </div>
+
+    <div id="chat-area" class="hidden flex flex-col h-96 mt-8 border border-indigo-500/50 rounded-lg p-4 overflow-y-auto bg-black/60"></div>
+    <input id="chat-input" class="hidden w-full p-3 mt-2 rounded bg-gray-800 border border-gray-600 focus:outline-none focus:border-purple-500" placeholder="Ask anything... code, ideas, life"/>
+  </section>
+
+  <footer class="text-center py-12 opacity-70">
+    <p>© 2026 Kodeka — Made with passion for developers</p>
+  </footer>
+
+  <script>
+    const supabase = Supabase.createClient('https://your-project.supabase.co', 'your-anon-key');
+
+    async function signUp() {
+      const { data, error } = await supabase.auth.signUp({
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value,
+      });
+      if (error) alert(error.message);
+      else alert("Check your email to confirm! Then sign in.");
+    }
+
+    async function signIn() {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value,
+      });
+      if (error) alert(error.message);
+      else startChat();
+    }
+
+    function startChat() {
+      document.getElementById('login-form').classList.add('hidden');
+      document.getElementById('chat-area').classList.remove('hidden');
+      document.getElementById('chat-input').classList.remove('hidden');
+
+      // Real-time subscription to messages (add your logic)
+      supabase.channel('public:messages')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+          addMessage(payload.new.content, payload.new.is_ai ? 'ai' : 'user');
+        })
+        .subscribe();
+
+      document.getElementById('chat-input').addEventListener('keypress', async e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          const text = e.target.value.trim();
+          if (!text) return;
+          addMessage(text, 'user');
+          e.target.value = '';
+
+          // Send to Supabase edge function or your backend
+          const { error } = await supabase.from('messages').insert({
+            content: text,
+            is_ai: false,
+            user_id: supabase.auth.user()?.id
+          });
+
+          // You can call AI here via edge function
+        }
+      });
+    }
+
+    function addMessage(text, who) {
+      const div = document.createElement('div');
+      div.className = `chat-bubble max-w-[80%] p-3 my-2 rounded-lg ${who === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'}`;
+      div.textContent = text;
+      document.getElementById('chat-area').appendChild(div);
+      div.scrollIntoView();
+    }
+  </script>
+</body>
+</html>
